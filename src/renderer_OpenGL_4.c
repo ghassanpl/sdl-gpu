@@ -24,6 +24,58 @@ void GPU_FreeRenderer_OpenGL_4(GPU_Renderer* renderer) {}
 #include "renderer_GL_common.inl"
 #include "renderer_shapes_GL_common.inl"
 
+static GPU_Image* CreateImageGL42(GPU_Renderer* renderer, Uint16 w, Uint16 h, GPU_FormatEnum format)
+{
+  /// First check if we support storage
+  int major = 0, minor = 0;
+  if (!(isExtensionSupported("ARB_texture_storage") || (get_GL_version(&major, &minor) && minor >= 2)))
+    return CreateImage(renderer, w, h, format);
+
+  GPU_Image* result;
+  GLenum internal_format, data_format;
+  static unsigned char* zero_buffer = NULL;
+  static unsigned int zero_buffer_size = 0;
+
+  if (format < 1)
+  {
+    GPU_PushErrorCode("GPU_CreateImage", GPU_ERROR_DATA_ERROR, "Unsupported image format (0x%x)", format);
+    return NULL;
+  }
+
+  result = CreateUninitializedImage(renderer, w, h, format);
+
+  if (result == NULL)
+  {
+    GPU_PushErrorCode("GPU_CreateImage", GPU_ERROR_BACKEND_ERROR, "Could not create image as requested.");
+    return NULL;
+  }
+
+  changeTexturing(renderer, GPU_TRUE);
+  bindTexture(renderer, result);
+
+  internal_format = ((GPU_IMAGE_DATA*)(result->data))->internal_format;
+  data_format = ((GPU_IMAGE_DATA*)(result->data))->format;
+  w = result->w;
+  h = result->h;
+  if (!(renderer->enabled_features & GPU_FEATURE_NON_POWER_OF_TWO))
+  {
+    if (!isPowerOfTwo(w))
+      w = (Uint16)getNearestPowerOf2(w);
+    if (!isPowerOfTwo(h))
+      h = (Uint16)getNearestPowerOf2(h);
+  }
+
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glPixelStorei(GL_UNPACK_ROW_LENGTH, w);
+  glTexStorage2D(GL_TEXTURE_2D, 0, internal_format, w, h);
+  glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+  
+  result->texture_w = w;
+  result->texture_h = h;
+
+  return result;
+}
 
 GPU_Renderer* GPU_CreateRenderer_OpenGL_4(GPU_RendererID request)
 {
@@ -48,6 +100,8 @@ GPU_Renderer* GPU_CreateRenderer_OpenGL_4(GPU_RendererID request)
     memset(renderer->impl, 0, sizeof(GPU_RendererImpl));
     SET_COMMON_FUNCTIONS(renderer->impl);
 
+    renderer->impl->CreateImage = &CreateImageGL42;
+    
     return renderer;
 }
 
