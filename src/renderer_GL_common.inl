@@ -1261,6 +1261,11 @@ static GPU_Target* Init(GPU_Renderer* renderer, GPU_RendererID renderer_request,
     // Tell SDL what we require for the GL context.
     GPU_flags = GPU_GetPreInitFlags();
 
+    if (GPU_flags & GPU_INIT_DEBUG_PROFILE)
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+    else
+      SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+
     renderer->GPU_init_flags = GPU_flags;
     if(GPU_flags & GPU_INIT_DISABLE_DOUBLE_BUFFER)
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 0);
