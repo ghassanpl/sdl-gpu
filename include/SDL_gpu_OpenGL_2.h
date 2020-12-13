@@ -130,6 +130,7 @@ typedef struct ImageData_OpenGL_2
     GPU_bool owns_handle;
 	Uint32 handle;
 	Uint32 format;
+	Uint32 internal_format;
 } ImageData_OpenGL_2;
 
 typedef struct TargetData_OpenGL_2

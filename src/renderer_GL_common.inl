@@ -374,13 +374,13 @@ static_inline void upload_texture(const void* pixels, GPU_Rect update_rect, Uint
     #endif
 }
 
-static_inline void upload_new_texture(void* pixels, GPU_Rect update_rect, Uint32 format, int alignment, int row_length, int bytes_per_pixel)
+static_inline void upload_new_texture(void* pixels, GPU_Rect update_rect, Uint32 internal_format, Uint32 format, int alignment, int row_length, int bytes_per_pixel)
 {
     #if defined(SDL_GPU_USE_OPENGL) || SDL_GPU_GLES_MAJOR_VERSION > 2
 	(void)bytes_per_pixel;
     glPixelStorei(GL_UNPACK_ALIGNMENT, alignment);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
-    glTexImage2D(GL_TEXTURE_2D, 0, format, (GLsizei)update_rect.w, (GLsizei)update_rect.h, 0,
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, (GLsizei)update_rect.w, (GLsizei)update_rect.h, 0,
                     format, GL_UNSIGNED_BYTE, pixels);
     glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
@@ -2354,6 +2354,7 @@ static GPU_Image* CreateUninitializedImage(GPU_Renderer* renderer, Uint16 w, Uin
 {
     GLuint handle, num_layers, bytes_per_pixel;
     GLenum gl_format;
+    GLenum gl_internal_format;
 	GPU_Image* result;
 	GPU_IMAGE_DATA* data;
 	SDL_Color white = { 255, 255, 255, 255 };
@@ -2362,27 +2363,32 @@ static GPU_Image* CreateUninitializedImage(GPU_Renderer* renderer, Uint16 w, Uin
     {
         case GPU_FORMAT_LUMINANCE:
             gl_format = GL_LUMINANCE;
+            gl_internal_format = GL_RED;
             num_layers = 1;
             bytes_per_pixel = 1;
             break;
         case GPU_FORMAT_LUMINANCE_ALPHA:
             gl_format = GL_LUMINANCE_ALPHA;
+            gl_internal_format = GL_RG;
             num_layers = 1;
             bytes_per_pixel = 2;
             break;
         case GPU_FORMAT_RGB:
             gl_format = GL_RGB;
+            gl_internal_format = GL_RGB;
             num_layers = 1;
             bytes_per_pixel = 3;
             break;
         case GPU_FORMAT_RGBA:
             gl_format = GL_RGBA;
+            gl_internal_format = GL_RGBA;
             num_layers = 1;
             bytes_per_pixel = 4;
             break;
         #ifdef GL_BGR
         case GPU_FORMAT_BGR:
             gl_format = GL_BGR;
+            gl_internal_format = GL_RGB;
             num_layers = 1;
             bytes_per_pixel = 3;
             break;
@@ -2390,6 +2396,7 @@ static GPU_Image* CreateUninitializedImage(GPU_Renderer* renderer, Uint16 w, Uin
         #ifdef GL_BGRA
         case GPU_FORMAT_BGRA:
             gl_format = GL_BGRA;
+            gl_internal_format = GL_RGBA;
             num_layers = 1;
             bytes_per_pixel = 4;
             break;
@@ -2397,29 +2404,34 @@ static GPU_Image* CreateUninitializedImage(GPU_Renderer* renderer, Uint16 w, Uin
         #ifdef GL_ABGR
         case GPU_FORMAT_ABGR:
             gl_format = GL_ABGR;
+            gl_internal_format = GL_RGBA;
             num_layers = 1;
             bytes_per_pixel = 4;
             break;
         #endif
         case GPU_FORMAT_ALPHA:
             gl_format = GL_ALPHA;
+            gl_internal_format = GL_R;
             num_layers = 1;
             bytes_per_pixel = 1;
             break;
         #ifndef SDL_GPU_USE_GLES
         case GPU_FORMAT_RG:
             gl_format = GL_RG;
+            gl_internal_format = GL_RG;
             num_layers = 1;
             bytes_per_pixel = 2;
             break;
         #endif
         case GPU_FORMAT_YCbCr420P:
             gl_format = GL_LUMINANCE;
+            gl_internal_format = GL_R;
             num_layers = 3;
             bytes_per_pixel = 1;
             break;
         case GPU_FORMAT_YCbCr422:
             gl_format = GL_LUMINANCE;
+            gl_internal_format = GL_R;
             num_layers = 3;
             bytes_per_pixel = 1;
             break;
@@ -2471,6 +2483,7 @@ static GPU_Image* CreateUninitializedImage(GPU_Renderer* renderer, Uint16 w, Uin
     data->handle = handle;
     data->owns_handle = GPU_TRUE;
     data->format = gl_format;
+    data->internal_format = gl_internal_format;
 
     result->using_virtual_resolution = GPU_FALSE;
     result->w = w;
@@ -2488,7 +2501,7 @@ static GPU_Image* CreateUninitializedImage(GPU_Renderer* renderer, Uint16 w, Uin
 static GPU_Image* CreateImage(GPU_Renderer* renderer, Uint16 w, Uint16 h, GPU_FormatEnum format)
 {
 	GPU_Image* result;
-	GLenum internal_format;
+	GLenum internal_format, data_format;
 	static unsigned char* zero_buffer = NULL;
 	static unsigned int zero_buffer_size = 0;
 
@@ -2509,7 +2522,8 @@ static GPU_Image* CreateImage(GPU_Renderer* renderer, Uint16 w, Uint16 h, GPU_Fo
     changeTexturing(renderer, GPU_TRUE);
     bindTexture(renderer, result);
 
-    internal_format = ((GPU_IMAGE_DATA*)(result->data))->format;
+    internal_format = ((GPU_IMAGE_DATA*)(result->data))->internal_format;
+    data_format = ((GPU_IMAGE_DATA*)(result->data))->format;
     w = result->w;
     h = result->h;
     if(!(renderer->enabled_features & GPU_FEATURE_NON_POWER_OF_TWO))
@@ -2530,7 +2544,7 @@ static GPU_Image* CreateImage(GPU_Renderer* renderer, Uint16 w, Uint16 h, GPU_Fo
     }
     
     
-    upload_new_texture(zero_buffer, GPU_MakeRect(0, 0, w, h), internal_format, 1, w, result->bytes_per_pixel);
+    upload_new_texture(zero_buffer, GPU_MakeRect(0, 0, w, h), internal_format, data_format, 1, w, result->bytes_per_pixel);
     
     
     // Tell SDL_gpu what we got (power-of-two requirements have made this change)
@@ -3394,7 +3408,7 @@ static GPU_Image* gpu_copy_image_pixels_only(GPU_Renderer* renderer, GPU_Image* 
         case GPU_FORMAT_RG:
         // Copy via texture download and upload (slow)
 		{
-			GLenum internal_format;
+			GLenum internal_format, data_format;
 			int w;
 			int h;
             unsigned char* texture_data = getRawImageData(renderer, image);
@@ -3415,7 +3429,8 @@ static GPU_Image* gpu_copy_image_pixels_only(GPU_Renderer* renderer, GPU_Image* 
             changeTexturing(renderer, 1);
             bindTexture(renderer, result);
 
-            internal_format = ((GPU_IMAGE_DATA*)(result->data))->format;
+            data_format = ((GPU_IMAGE_DATA*)(result->data))->format;
+            internal_format = ((GPU_IMAGE_DATA*)(result->data))->internal_format;
             w = result->w;
             h = result->h;
             if(!(renderer->enabled_features & GPU_FEATURE_NON_POWER_OF_TWO))
@@ -3426,7 +3441,7 @@ static GPU_Image* gpu_copy_image_pixels_only(GPU_Renderer* renderer, GPU_Image* 
                     h = getNearestPowerOf2(h);
             }
 
-            upload_new_texture(texture_data, GPU_MakeRect(0, 0, (float)w, (float)h), internal_format, 1, w, result->bytes_per_pixel);
+            upload_new_texture(texture_data, GPU_MakeRect(0, 0, (float)w, (float)h), internal_format, data_format, 1, w, result->bytes_per_pixel);
             
             
             // Tell SDL_gpu what we got.
@@ -3661,7 +3676,7 @@ static GPU_bool ReplaceImage(GPU_Renderer* renderer, GPU_Image* image, SDL_Surfa
 	GPU_IMAGE_DATA* data;
 	GPU_Rect sourceRect;
 	SDL_Surface* newSurface;
-	GLenum internal_format;
+	GLenum internal_format, data_format;
 	Uint8* pixels;
 	int w, h;
 	int alignment;
@@ -3679,9 +3694,10 @@ static GPU_bool ReplaceImage(GPU_Renderer* renderer, GPU_Image* image, SDL_Surfa
     }
 
     data = (GPU_IMAGE_DATA*)image->data;
-    internal_format = data->format;
+    internal_format = data->internal_format;
+    data_format = data->format;
 
-    newSurface = copySurfaceIfNeeded(renderer, internal_format, surface, &internal_format);
+    newSurface = copySurfaceIfNeeded(renderer, data_format, surface, &data_format);
     if(newSurface == NULL)
     {
         GPU_PushErrorCode("GPU_ReplaceImage", GPU_ERROR_BACKEND_ERROR, "Failed to convert surface to proper pixel format.");
@@ -3785,7 +3801,7 @@ static GPU_bool ReplaceImage(GPU_Renderer* renderer, GPU_Image* image, SDL_Surfa
     // Shift the pixels pointer to the proper source position
     pixels += (int)(newSurface->pitch * sourceRect.y + (newSurface->format->BytesPerPixel)*sourceRect.x);
 
-    upload_new_texture(pixels, GPU_MakeRect(0, 0, (float)w, (float)h), internal_format, alignment, (newSurface->pitch / newSurface->format->BytesPerPixel), newSurface->format->BytesPerPixel);
+    upload_new_texture(pixels, GPU_MakeRect(0, 0, (float)w, (float)h), internal_format, data_format, alignment, (newSurface->pitch / newSurface->format->BytesPerPixel), newSurface->format->BytesPerPixel);
     
 
     // Delete temporary surface
