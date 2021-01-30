@@ -261,9 +261,27 @@ static SDL_PixelFormat* AllocFormat(GLenum glFormat);
 static void FreeFormat(SDL_PixelFormat* format);
 
 
-static char shader_message[256];
+static char* shader_message = NULL;
+static size_t shader_message_length = 0;
 
+static void alloc_shader_message(size_t length) 
+{
+	shader_message_length = length;
 
+	if (!shader_message) {
+		shader_message = (char*)malloc(length);
+	}
+	else {
+		realloc((void*)shader_message, length);
+	}
+}
+
+static void set_internal_shader_message(const char* msg) 
+{
+	size_t l = strlen(msg);
+	alloc_shader_message(l);
+	strncpy(shader_message, msg, l);
+}
 
 static GPU_bool isExtensionSupported(const char* extension_str)
 {
@@ -1873,9 +1891,9 @@ static GPU_Target* CreateTargetFromWindow(GPU_Renderer* renderer, Uint32 windowI
     }
     else
     {
-        snprintf(shader_message, 256, "Shaders not supported by this hardware.  Default shaders are disabled.\n");
-        target->context->default_untextured_shader_program = target->context->current_shader_program = 0;
-    }
+		set_internal_shader_message("Shaders not supported by this hardware.  Default shaders are disabled.\n");
+		target->context->default_untextured_shader_program = target->context->current_shader_program = 0;
+	}
 
     #ifdef SDL_GPU_USE_BUFFER_PIPELINE
         // Create vertex array container and buffer
@@ -6103,17 +6121,17 @@ static Uint32 compile_shader_source(GPU_ShaderEnum shader_type, const char* shad
     #ifdef GL_GEOMETRY_SHADER
         shader_object = glCreateShader(GL_GEOMETRY_SHADER);
     #else
-        GPU_PushErrorCode("GPU_CompileShader", GPU_ERROR_BACKEND_ERROR, "Hardware does not support GPU_GEOMETRY_SHADER.");
-        snprintf(shader_message, 256, "Failed to create geometry shader object.\n");
-        return 0;
+			GPU_PushErrorCode("GPU_CompileShader", GPU_ERROR_BACKEND_ERROR, "Hardware does not support GPU_GEOMETRY_SHADER.");
+			set_internal_shader_message("Failed to create geometry shader object.\n");
+			return 0;
     #endif
         break;
     }
 
-    if(shader_object == 0)
-    {
-        GPU_PushErrorCode("GPU_CompileShader", GPU_ERROR_BACKEND_ERROR, "Failed to create new shader object");
-        snprintf(shader_message, 256, "Failed to create new shader object.\n");
+	if (shader_object == 0)
+	{
+		GPU_PushErrorCode("GPU_CompileShader", GPU_ERROR_BACKEND_ERROR, "Failed to create new shader object");
+		set_internal_shader_message("Failed to create new shader object.\n");
         return 0;
     }
 
@@ -6127,7 +6145,11 @@ static Uint32 compile_shader_source(GPU_ShaderEnum shader_type, const char* shad
     if(!compiled)
     {
         GPU_PushErrorCode("GPU_CompileShader", GPU_ERROR_DATA_ERROR, "Failed to compile shader source");
-        glGetShaderInfoLog(shader_object, 256, NULL, shader_message);
+
+		GLint s_length = 0;
+		glGetShaderiv(shader_object, GL_INFO_LOG_LENGTH, &s_length);
+		alloc_shader_message((size_t)s_length);
+		glGetShaderInfoLog(shader_object, s_length, NULL, shader_message);
         glDeleteShader(shader_object);
         return 0;
     }
@@ -6152,9 +6174,9 @@ static Uint32 CompileShader_RW(GPU_Renderer* renderer, GPU_ShaderEnum shader_typ
     
     if(!result)
     {
-        GPU_PushErrorCode("GPU_CompileShader", GPU_ERROR_DATA_ERROR, "Failed to read shader source");
-        snprintf(shader_message, 256, "Failed to read shader source.\n");
-        SDL_free(source_string);
+		GPU_PushErrorCode("GPU_CompileShader", GPU_ERROR_DATA_ERROR, "Failed to read shader source");
+		set_internal_shader_message("Failed to read shader source.\n");
+		SDL_free(source_string);
         return 0;
     }
 
@@ -6209,9 +6231,14 @@ static GPU_bool LinkShaderProgram(GPU_Renderer* renderer, Uint32 program_object)
 
 	if(!linked)
     {
-        GPU_PushErrorCode("GPU_LinkShaderProgram", GPU_ERROR_BACKEND_ERROR, "Failed to link shader program");
-        glGetProgramInfoLog(program_object, 256, NULL, shader_message);
-        glDeleteProgram(program_object);
+		GPU_PushErrorCode("GPU_LinkShaderProgram", GPU_ERROR_BACKEND_ERROR, "Failed to link shader program");
+
+		GLint s_length = 0;
+		glGetProgramiv(program_object, GL_INFO_LOG_LENGTH, &s_length);
+		alloc_shader_message(s_length);
+
+		glGetProgramInfoLog(program_object, s_length, NULL, shader_message);
+		glDeleteProgram(program_object);
         return GPU_FALSE;
     }
 
