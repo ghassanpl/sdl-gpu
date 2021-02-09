@@ -6,12 +6,12 @@
 #endif
 #include <math.h> // Must be included before SDL.h, otherwise both try to define M_PI and we get a warning
 
-#include "SDL.h"
+#include <SDL2/SDL.h>
 #include <stdio.h>
 #include <stdarg.h>
 
 // Use SDL's DLL defines
-#include "begin_code.h"
+#include <SDL2/begin_code.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -2062,7 +2062,7 @@ DECLSPEC void SDLCALL GPU_SetAttributeSource(int num_values, GPU_Attribute sourc
 }
 #endif
 
-#include "close_code.h"
+#include <SDL2/close_code.h>
 
 
 #endif
