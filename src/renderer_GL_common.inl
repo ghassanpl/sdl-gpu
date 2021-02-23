@@ -20,7 +20,7 @@ See a particular renderer's *.c file for specifics. */
 
 #include <stdint.h>
 #include <stdlib.h>
-#include "SDL_platform.h"
+#include <SDL2/SDL_platform.h>
 #include "SDL_gpu.h"  // For poor, dumb Intellisense
 #include <math.h>
 #include <string.h>

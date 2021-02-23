@@ -1,5 +1,5 @@
 #include "SDL_gpu.h"
-#include "SDL_platform.h"
+#include <SDL2/SDL_platform.h>
 #include <string.h>
 
 #ifndef _MSC_VER

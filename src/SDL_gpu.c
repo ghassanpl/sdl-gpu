@@ -1,6 +1,6 @@
 #include "SDL_gpu.h"
 #include "SDL_gpu_RendererImpl.h"
-#include "SDL_platform.h"
+#include <SDL2/SDL_platform.h>
 #include "stb_image.h"
 #include "stb_image_write.h"
 #include <stdlib.h>
